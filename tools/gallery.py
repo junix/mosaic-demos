@@ -11,6 +11,7 @@ straight from a checkout and it works, no server and no build step.
 """
 from __future__ import annotations
 
+import argparse
 import html
 import json
 import re
@@ -474,7 +475,7 @@ def render_card(item: dict, cfg: dict) -> str:
       </article>"""
 
 
-def build() -> int:
+def build(check_only: bool = False) -> int:
     global TRACKED
     TRACKED = tracked_files()
     cfg = load_config()
@@ -576,8 +577,7 @@ def build() -> int:
   </section>
   <p id="empty" hidden>No demos match the current filter.</p>"""
 
-    OUTPUT.write_text(
-        f"""<!doctype html>
+    page = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -637,13 +637,22 @@ def build() -> int:
 </script>
 </body>
 </html>
-""",
-        encoding="utf-8",
-    )
+"""
+    if check_only:
+        if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != page:
+            print("stale gallery: run just gallery", file=sys.stderr)
+            return 1
+        print(f"gallery.html: current ({len(items)} demos, {rendered} with artifacts)")
+        return 0
+    OUTPUT.write_text(page, encoding="utf-8")
     note = f", {uncommitted} artifacts not committed (blank in a fresh clone)" if uncommitted else ""
     print(f"gallery.html: {len(items)} demos, {rendered} with artifacts{note}")
     return 0 if rendered else 1
 
 
 if __name__ == "__main__":
-    sys.exit(build())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true",
+                        help="fail (exit 1) unless gallery.html is current")
+    args = parser.parse_args()
+    sys.exit(build(check_only=args.check))

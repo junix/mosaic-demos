@@ -9,7 +9,6 @@ out/*
 build/
 .next/
 .nuxt/
-out/
 # TypeScript build info
 *.tsbuildinfo
 # Logs
