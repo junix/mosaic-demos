@@ -356,6 +356,19 @@ h1{margin:0;font-size:30px;letter-spacing:-.02em;font-weight:650}
 .pill{font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);
   background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 11px}
 .pill b{color:var(--ink);font-weight:600}
+.controls{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  padding:12px 0;margin:0 0 26px;background:linear-gradient(var(--bg) 80%,transparent)}
+.controls input{flex:1 1 220px;max-width:400px;border:1px solid var(--line);border-radius:10px;
+  background:var(--panel);color:var(--ink);padding:9px 13px;font-size:14px;font-family:inherit}
+.controls input:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);cursor:pointer;
+  background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 11px}
+.chip span{color:var(--faint);margin-left:3px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.chip[aria-pressed="true"] span{color:var(--bg);opacity:.75}
+#count{margin-left:auto;color:var(--muted);font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+#empty{color:var(--muted);font-size:14px}
 .grid{display:grid;gap:26px;grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
   overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
@@ -444,7 +457,12 @@ def render_card(item: dict, cfg: dict) -> str:
     klass = f"shot {cfg['backdrop']}"
     if len(shown) > 1:
         klass += " multi tall"
-    return f"""      <article class="card">
+    family = html.escape(item["family"], quote=True)
+    search = html.escape(
+        " ".join((item["title"], item["blurb"], " ".join(item["tags"]), item["index"], item["family"])).casefold(),
+        quote=True,
+    )
+    return f"""      <article class="card" data-family="{family}" data-search="{search}">
         <figure class="{klass}">{''.join(shot)}</figure>
         <div class="body">
           <div class="idx">{html.escape(item['index'])}</div>
@@ -512,6 +530,7 @@ def build() -> int:
                 "title": title,
                 "blurb": blurb,
                 "tags": tags,
+                "family": (entry.get("family") or entry.get("use") or "").strip(),
                 "artifacts": artifacts_for(stem, cfg),
                 "code": code,
                 "code_path": code_path,
@@ -531,6 +550,32 @@ def build() -> int:
     if cfg.get("library"):
         pills.insert(0, f'<span class="pill">{html.escape(cfg["library"])}</span>')
 
+    # Family chips only where family is a real grouping axis: the number of
+    # distinct families must be at most half the demos (grouping actually
+    # condenses). Where nearly every demo is its own family, chips would be
+    # fake navigation — search alone.
+    groups: dict[str, int] = {}
+    for i in items:
+        if i["family"]:
+            groups[i["family"]] = groups.get(i["family"], 0) + 1
+    ordered = sorted(groups.items(), key=lambda kv: (-kv[1], kv[0].casefold()))
+    if len(ordered) >= 2 and len(ordered) * 2 <= len(items):
+        chip = ['<button class="chip" type="button" data-family="" aria-pressed="true">All</button>']
+        chip += [
+            f'<button class="chip" type="button" data-family="{html.escape(f, quote=True)}">'
+            f'{html.escape(f)} <span>{n}</span></button>'
+            for f, n in ordered
+        ]
+        chips_html = f'<div class="chips" role="group" aria-label="Filter by family">{"".join(chip)}</div>'
+    else:
+        chips_html = ""
+    controls = f"""  <section class="controls" aria-label="Gallery filters">
+    <input id="q" type="search" placeholder="Filter by title, blurb, tag, or family…" autocomplete="off" aria-label="Filter demos">
+    {chips_html}
+    <output id="count" aria-live="polite">{len(items)} shown</output>
+  </section>
+  <p id="empty" hidden>No demos match the current filter.</p>"""
+
     OUTPUT.write_text(
         f"""<!doctype html>
 <html lang="en">
@@ -547,6 +592,7 @@ def build() -> int:
     <p class="tagline">{html.escape(cfg['tagline'])}</p>
     <div class="meta">{''.join(pills)}</div>
   </header>
+{controls}
   <main class="grid">
 {cards}
   </main>
@@ -556,6 +602,39 @@ def build() -> int:
     <code>{html.escape('/'.join(cfg['artifact_dirs']))}/</code>, so open this file straight from the checkout.
   </footer>
 </div>
+<script>
+(function(){{
+  var q=document.getElementById('q'),count=document.getElementById('count'),empty=document.getElementById('empty');
+  var cards=[].slice.call(document.querySelectorAll('.card'));
+  var chips=[].slice.call(document.querySelectorAll('.chip'));
+  var family='';
+  function apply(){{
+    var t=q.value.trim().toLowerCase(),n=0;
+    for(var i=0;i<cards.length;i++){{
+      var c=cards[i];
+      var ok=(!family||c.getAttribute('data-family')===family)&&
+             (!t||(c.getAttribute('data-search')||'').indexOf(t)>=0);
+      c.style.display=ok?'':'none';
+      if(ok)n++;
+    }}
+    count.value=n+' / '+cards.length+' shown';
+    empty.hidden=n>0;
+    for(var j=0;j<chips.length;j++){{
+      var ch=chips[j];
+      ch.setAttribute('aria-pressed',String(ch.getAttribute('data-family')===family));
+    }}
+  }}
+  q.addEventListener('input',apply);
+  chips.forEach(function(ch){{
+    ch.addEventListener('click',function(){{
+      var f=ch.getAttribute('data-family');
+      family=(f===family)?'':f;
+      apply();
+    }});
+  }});
+  apply();
+}})();
+</script>
 </body>
 </html>
 """,

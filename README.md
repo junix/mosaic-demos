@@ -2,6 +2,8 @@
 
 Database-backed plots built with Mosaic, vgplot, and a fully local DuckDB-WASM bundle. The primary output is twelve background-transparent PNGs; the browser views are an optional interactive companion.
 
+Browse every demo with its source in **[gallery.html](gallery.html)** — searchable, follows your light/dark theme.
+
 ```bash
 npm install
 npm run build

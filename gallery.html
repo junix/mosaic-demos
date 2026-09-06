@@ -32,6 +32,19 @@ h1{margin:0;font-size:30px;letter-spacing:-.02em;font-weight:650}
 .pill{font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);
   background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 11px}
 .pill b{color:var(--ink);font-weight:600}
+.controls{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  padding:12px 0;margin:0 0 26px;background:linear-gradient(var(--bg) 80%,transparent)}
+.controls input{flex:1 1 220px;max-width:400px;border:1px solid var(--line);border-radius:10px;
+  background:var(--panel);color:var(--ink);padding:9px 13px;font-size:14px;font-family:inherit}
+.controls input:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);cursor:pointer;
+  background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 11px}
+.chip span{color:var(--faint);margin-left:3px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.chip[aria-pressed="true"] span{color:var(--bg);opacity:.75}
+#count{margin-left:auto;color:var(--muted);font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+#empty{color:var(--muted);font-size:14px}
 .grid{display:grid;gap:26px;grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
   overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
@@ -86,8 +99,14 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
     <p class="tagline">Database-backed plots built on Mosaic, vgplot and a fully local DuckDB-WASM bundle — twelve transparent PNGs, with the browser views as an optional interactive companion.</p>
     <div class="meta"><span class="pill">Mosaic · DuckDB-WASM</span><span class="pill"><b>12</b> demos</span><span class="pill"><b>12</b> rendered</span></div>
   </header>
+  <section class="controls" aria-label="Gallery filters">
+    <input id="q" type="search" placeholder="Filter by title, blurb, tag, or family…" autocomplete="off" aria-label="Filter demos">
+    
+    <output id="count" aria-live="polite">12 shown</output>
+  </section>
+  <p id="empty" hidden>No demos match the current filter.</p>
   <main class="grid">
-      <article class="card">
+      <article class="card" data-family="large-data density" data-search="density where do one million points concentrate at screen resolution? duckdb heatmap million-points advanced 01 · large-data density large-data density">
         <figure class="shot light"><img src="out/density-transparent.png" alt="Density" loading="lazy"></figure>
         <div class="body">
           <div class="idx">01 · large-data density</div>
@@ -113,7 +132,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="dense time series" data-search="signals how can four long signals remain explorable? dense-line pan-zoom time advanced 02 · dense time series dense time series">
         <figure class="shot light"><img src="out/signals-transparent.png" alt="Signals" loading="lazy"></figure>
         <div class="body">
           <div class="idx">02 · dense time series</div>
@@ -140,7 +159,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="linked views" data-search="linked how does a spatial brush filter an hourly profile? crossfilter hexbin linked advanced 03 · linked views linked views">
         <figure class="shot light"><img src="out/linked-transparent.png" alt="Linked" loading="lazy"></figure>
         <div class="body">
           <div class="idx">03 · linked views</div>
@@ -188,7 +207,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="distribution" data-search="distribution how do four cohorts differ across a dense measurement distribution? density cohort sql advanced 04 · distribution distribution">
         <figure class="shot light"><img src="out/distribution-transparent.png" alt="Distribution" loading="lazy"></figure>
         <div class="body">
           <div class="idx">04 · distribution</div>
@@ -199,7 +218,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="relationship" data-search="regression what nonlinear relationship remains after dense sampling? scatter regression million-points advanced 05 · relationship relationship">
         <figure class="shot light"><img src="out/regression-transparent.png" alt="Regression" loading="lazy"></figure>
         <div class="body">
           <div class="idx">05 · relationship</div>
@@ -210,7 +229,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="cohort time" data-search="retention how do eight cohorts retain activity over 24 periods? line cohort retention advanced 06 · cohort time cohort time">
         <figure class="shot light"><img src="out/retention-transparent.png" alt="Retention" loading="lazy"></figure>
         <div class="body">
           <div class="idx">06 · cohort time</div>
@@ -221,7 +240,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="matrix" data-search="quality matrix which phase and subsystem pairs accumulate quality risk? cell matrix risk advanced 07 · matrix matrix">
         <figure class="shot light"><img src="out/quality-matrix-transparent.png" alt="Quality matrix" loading="lazy"></figure>
         <div class="body">
           <div class="idx">07 · matrix</div>
@@ -232,7 +251,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="comparison" data-search="rankings how do regional scores and uncertainty compare? dot rank comparison advanced 08 · comparison comparison">
         <figure class="shot light"><img src="out/rankings-transparent.png" alt="Rankings" loading="lazy"></figure>
         <div class="body">
           <div class="idx">08 · comparison</div>
@@ -243,7 +262,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="events" data-search="anomalies where do rare spikes appear inside a dense signal? spike anomaly time advanced 09 · events events">
         <figure class="shot light"><img src="out/anomalies-transparent.png" alt="Anomalies" loading="lazy"></figure>
         <div class="body">
           <div class="idx">09 · events</div>
@@ -254,7 +273,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="vector field" data-search="vector field how does directional flow vary across a sampled grid? vector field grid advanced 10 · vector field vector field">
         <figure class="shot light"><img src="out/vector-field-transparent.png" alt="Vector field" loading="lazy"></figure>
         <div class="body">
           <div class="idx">10 · vector field</div>
@@ -265,7 +284,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="faceted analysis" data-search="small multiples how do the same metrics behave across four services? small-multiples services comparison advanced 11 · faceted analysis faceted analysis">
         <figure class="shot light"><img src="out/small-multiples-transparent.png" alt="Small multiples" loading="lazy"></figure>
         <div class="body">
           <div class="idx">11 · faceted analysis</div>
@@ -276,7 +295,7 @@ footer code{background:var(--chip);border-radius:4px;padding:2px 6px;
 </code></pre></details>
         </div>
       </article>
-      <article class="card">
+      <article class="card" data-family="analytical dashboard" data-search="operations how do load, latency, errors, and queue depth align? dashboard linked operations advanced 12 · analytical dashboard analytical dashboard">
         <figure class="shot light"><img src="out/operations-transparent.png" alt="Operations" loading="lazy"></figure>
         <div class="body">
           <div class="idx">12 · analytical dashboard</div>
@@ -313,5 +332,38 @@ build().catch(error =&gt; {
     <code>out/</code>, so open this file straight from the checkout.
   </footer>
 </div>
+<script>
+(function(){
+  var q=document.getElementById('q'),count=document.getElementById('count'),empty=document.getElementById('empty');
+  var cards=[].slice.call(document.querySelectorAll('.card'));
+  var chips=[].slice.call(document.querySelectorAll('.chip'));
+  var family='';
+  function apply(){
+    var t=q.value.trim().toLowerCase(),n=0;
+    for(var i=0;i<cards.length;i++){
+      var c=cards[i];
+      var ok=(!family||c.getAttribute('data-family')===family)&&
+             (!t||(c.getAttribute('data-search')||'').indexOf(t)>=0);
+      c.style.display=ok?'':'none';
+      if(ok)n++;
+    }
+    count.value=n+' / '+cards.length+' shown';
+    empty.hidden=n>0;
+    for(var j=0;j<chips.length;j++){
+      var ch=chips[j];
+      ch.setAttribute('aria-pressed',String(ch.getAttribute('data-family')===family));
+    }
+  }
+  q.addEventListener('input',apply);
+  chips.forEach(function(ch){
+    ch.addEventListener('click',function(){
+      var f=ch.getAttribute('data-family');
+      family=(f===family)?'':f;
+      apply();
+    });
+  });
+  apply();
+})();
+</script>
 </body>
 </html>
