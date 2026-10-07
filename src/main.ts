@@ -28,7 +28,7 @@ const scenes: Record<SceneName, {title: string; subtitle: string; rows: number}>
   regression:{title:'Dense relationship explorer',subtitle:'Hexagonal density and a fitted trend expose structure without overplotting.',rows:480_000},
   retention:{title:'Cohort retention atlas',subtitle:'Eight cohorts are aggregated by period inside DuckDB before rendering.',rows:320_000},
   'quality-matrix':{title:'Quality risk matrix',subtitle:'Subsystem and lifecycle phase form a database-aggregated risk surface.',rows:280_000},
-  rankings:{title:'Regional performance ranks',subtitle:'Millions of events become a compact ranked comparison with uncertainty cues.',rows:240_000},
+  rankings:{title:'Regional performance ranks',subtitle:'DuckDB aggregates each region into a ranked mean, a 10th–90th percentile interval bar, and its sample count.',rows:240_000},
   anomalies:{title:'Rare-event signal monitor',subtitle:'Dense temporal values and exceptional spikes share one scalable view.',rows:420_000},
   'vector-field':{title:'Sampled flow vectors',subtitle:'A SQL-generated directional field is rendered as magnitude-aware glyphs.',rows:180_000},
   'small-multiples':{title:'Service behavior small multiples',subtitle:'Four coordinated views compare latency, load, errors, and saturation.',rows:360_000},
@@ -151,6 +151,30 @@ async function build(): Promise<void> {
         cos((i % 96) / 96.0 * 2 * pi()) AS vy
       FROM range(${meta.rows}) AS m(i)
     `);
+    if(scene==='rankings')await coordinator.exec(`
+      CREATE TABLE region_stats AS
+      WITH aggregates AS (
+        SELECT
+          cohort,
+          avg(value) AS mean_score,
+          quantile_cont(value, 0.10) AS q10,
+          quantile_cont(value, 0.90) AS q90,
+          CAST(count(*) AS INTEGER) AS n
+        FROM measures
+        GROUP BY cohort
+      )
+      SELECT
+        CAST(ROW_NUMBER() OVER (ORDER BY mean_score DESC) AS INTEGER) AS rank,
+        cohort,
+        mean_score,
+        q10,
+        q90,
+        n,
+        q90 + 3.4 AS q90_label_x,
+        'n=' || CAST(n AS VARCHAR) AS count_label
+      FROM aggregates
+      ORDER BY rank
+    `);
     const source=vg.from('measures');
     const wide={width:1120,height:610,marginLeft:72,marginBottom:54};
     let view:any;
@@ -158,7 +182,11 @@ async function build(): Promise<void> {
     else if(scene==='regression')view=vg.plot(vg.hexbin(source,{x:'value',y:'metric',fill:vg.count(),binWidth:11}),vg.regressionY(source,{x:'value',y:'metric',stroke:'#ff6f91',strokeWidth:3}),vg.colorScheme('viridis'),vg.colorLegend(),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(68),vg.xLabel('input metric'),vg.yLabel('response'));
     else if(scene==='retention')view=vg.plot(vg.lineY(source,{x:'period',y:vg.avg('value'),z:'cohort',stroke:'cohort',strokeWidth:2}),vg.dot(source,{x:'period',y:vg.avg('value'),fill:'cohort',r:2}),vg.colorScheme('turbo'),vg.colorLegend(),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(68),vg.yGrid(true),vg.xLabel('period'),vg.yLabel('retained activity'));
     else if(scene==='quality-matrix')view=vg.plot(vg.cell(source,{x:'cohort',y:'subsystem',fill:vg.avg('value'),inset:2}),vg.colorScheme('magma'),vg.colorLegend(),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(90),vg.xLabel('lifecycle phase'),vg.yLabel('subsystem'));
-    else if(scene==='rankings')view=vg.plot(vg.dot(source,{x:vg.avg('value'),y:'cohort',fill:'cohort',r:11}),vg.ruleY([0,1,2,3,4,5,6,7],{y:(d:number)=>d,stroke:'#52758c',strokeOpacity:.25}),vg.colorScheme('turbo'),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(90),vg.xLabel('mean score'),vg.yLabel('region rank'));
+    else if(scene==='rankings'){
+      const stats=vg.from('region_stats');
+      runtime.rankings=await coordinator.query('SELECT rank, cohort, mean_score AS mean, q10, q90, n FROM region_stats ORDER BY rank',{type:'json'}) as NonNullable<Window['__mosaicDemo']>['rankings'];
+      view=vg.plot(vg.ruleY(stats,{x1:'q10',x2:'q90',y:'rank',stroke:'#52758c',strokeOpacity:.55,strokeWidth:3}),vg.dot(stats,{x:'mean_score',y:'rank',fill:'cohort',r:11}),vg.text(stats,{x:'q90_label_x',y:'rank',text:'count_label',fill:'#52758c',fontSize:12}),vg.colorScheme('turbo'),vg.colorLegend(),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(90),vg.xLabel('score · dot = region mean, bar = 10th–90th percentile'),vg.yLabel('region rank (1 = highest mean)'),vg.yReverse(true),vg.yTicks([1,2,3,4,5,6,7,8]));
+    }
     else if(scene==='anomalies')view=vg.plot(vg.denseLine(source,{x:'i',y:'value'}),vg.spike(source,{x:'i',y:'metric',stroke:'#ff6f91'}),vg.panZoomX(),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(70),vg.xLabel('event index'),vg.yLabel('signal / anomaly'));
     else if(scene==='vector-field')view=vg.plot(vg.vector(source,{x:'period',y:'subsystem',rotate:'vx',length:'value',stroke:'cohort'}),vg.colorScheme('turbo'),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(70),vg.xLabel('phase'),vg.yLabel('field band'));
     else if(scene==='small-multiples'){const views=Array.from({length:4},(_,k)=>vg.plot(vg.lineY(vg.from('measures',{filter:`subsystem = ${k}`}),{x:'period',y:vg.avg('value'),stroke:`${['#54d6c6','#7b9cff','#ff6f91','#ffd166'][k]}`}),vg.width(560),vg.height(280),vg.marginLeft(55),vg.yGrid(true),vg.xLabel(`service ${k+1}`)));view=vg.vconcat(vg.hconcat(views[0],views[1]),vg.hconcat(views[2],views[3]));}

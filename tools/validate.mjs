@@ -43,6 +43,49 @@ function inspectTransparentPng(buffer, scene) {
   return {width: image.width, height: image.height, clear, ink};
 }
 
+// The rankings scene must answer its catalog question ("How do regional scores
+// and uncertainty compare?"). The scene exposes its DuckDB aggregates as
+// window.__mosaicDemo.rankings; recompute mean and 10th–90th percentile per
+// region from the deterministic value generator in src/main.ts (kept in sync
+// here on purpose) and require matching endpoints, mean-inside-interval
+// pairing, mean-ordered ranks, and horizontal interval rules wider than dots.
+function verifyRankingsInterval(state, failures) {
+  const rows = state.rankings ?? [];
+  if (rows.length !== 8) {
+    failures.push(`rankings: expected 8 aggregated regions, got ${rows.length}`);
+    return;
+  }
+  const scores = new Map();
+  for (let cohort = 0; cohort < 8; cohort += 1) scores.set(cohort, []);
+  for (let i = 0; i < state.rows; i += 1) {
+    const value = 42 + 18 * Math.sin(i * 0.017) + 11 * Math.cos(i * 0.0043) + (i % 31) / 3.0;
+    scores.get(Math.floor(i / 96) % 8).push(value);
+  }
+  const quantile = (sorted, p) => {
+    const h = (sorted.length - 1) * p;
+    const lo = Math.floor(h);
+    return sorted[lo] + (h - lo) * (sorted[Math.min(lo + 1, sorted.length - 1)] - sorted[lo]);
+  };
+  const byRank = [...rows].sort((a, b) => a.rank - b.rank);
+  for (let k = 1; k < byRank.length; k += 1) {
+    if (byRank[k].mean > byRank[k - 1].mean) failures.push('rankings: ranks not ordered by displayed mean');
+  }
+  for (const row of rows) {
+    const sorted = scores.get(row.cohort).sort((a, b) => a - b);
+    const mean = sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
+    const checks = [
+      ['sample count', row.n, sorted.length, 0],
+      ['mean', row.mean, mean, 1e-8],
+      ['10th percentile', row.q10, quantile(sorted, 0.1), 1e-8],
+      ['90th percentile', row.q90, quantile(sorted, 0.9), 1e-8]
+    ];
+    for (const [name, got, want, tolerance] of checks) {
+      if (Math.abs(got - want) > tolerance) failures.push(`rankings: region ${row.cohort} ${name} is ${got}, expected ${want}`);
+    }
+    if (!(row.q10 <= row.mean && row.mean <= row.q90)) failures.push(`rankings: region ${row.cohort} mean outside its interval`);
+  }
+}
+
 try {
   await mkdir(resolve(root, 'out'), {recursive: true});
   await waitForServer();
@@ -61,6 +104,13 @@ try {
     await page.waitForFunction(() => window.__mosaicDemo?.ready === true || Boolean(window.__mosaicDemo?.error), undefined, {timeout: 40_000});
     const state = await page.evaluate(() => ({...window.__mosaicDemo}));
     if (state.error) throw new Error(`${scene}: ${state.error}`);
+    if (scene === 'rankings') {
+      verifyRankingsInterval(state, failures);
+      const wideRules = await page.$$eval('#chart svg line', lines => lines
+        .filter(line => Math.abs(Number(line.getAttribute('x2')) - Number(line.getAttribute('x1'))) > 60)
+        .length);
+      if (wideRules < 8) failures.push(`rankings: interval bars missing (${wideRules} rules wider than a dot)`);
+    }
     await page.waitForSelector('#chart svg, #chart canvas', {timeout: 10_000});
     await page.waitForTimeout(450);
     const path = resolve(root, 'out', `${scene}-transparent.png`);
