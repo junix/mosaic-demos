@@ -9,6 +9,7 @@ declare global {
       interactions: number;
       error?: string;
       rankings?: Array<{rank: number; cohort: number; mean: number; q10: number; q90: number; n: number}>;
+      selection?: {table: string; count: number; updates: number; error?: string};
     };
   }
 }

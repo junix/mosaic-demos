@@ -74,6 +74,34 @@ async function localDatabase(): Promise<duckdb.AsyncDuckDB> {
   return db;
 }
 
+// Expose a semantic probe of crossfilter linking for the linked and operations
+// scenes: whenever the brush selection changes, re-query how many rows the
+// dependent views currently match. A working crossfilter must drop this count
+// below the full row count under a brush and restore it when the brush resets.
+function trackSelection(coordinator: Coordinator, select: any, table: string): void {
+  runtime.selection = {table, count: meta.rows, updates: 0};
+  let latest = 0;
+  select.addEventListener('value', async () => {
+    const ticket = ++latest;
+    try {
+      const predicate = select.predicate();
+      const where = (Array.isArray(predicate) ? predicate : [predicate])
+        .filter(Boolean)
+        .map(clause => `(${clause})`)
+        .join(' AND ') || 'TRUE';
+      const [row] = await coordinator.query(
+        `SELECT count(*) AS n FROM ${table} WHERE ${where}`,
+        {type: 'json'}
+      ) as Array<{n: number}>;
+      if (ticket !== latest) return;
+      runtime.selection = {table, count: Number(row.n), updates: (runtime.selection?.updates ?? 0) + 1};
+    } catch (error) {
+      if (ticket !== latest) return;
+      runtime.selection = {table, count: -1, updates: (runtime.selection?.updates ?? 0) + 1, error: String(error)};
+    }
+  });
+}
+
 async function build(): Promise<void> {
   const database = await localDatabase();
   const connector = new DuckDBWASMConnector({duckdb: database});
@@ -127,6 +155,7 @@ async function build(): Promise<void> {
       FROM range(${meta.rows}) AS e(i)
     `);
     const select = vg.Selection.crossfilter();
+    trackSelection(coordinator, select, 'events');
     const points = vg.plot(
       vg.hexbin(vg.from('events'), {x: 'hour', y: 'latency', fill: vg.count(), binWidth: 13}),
       vg.intervalXY({as: select}), vg.colorScheme('viridis'),
@@ -190,7 +219,7 @@ async function build(): Promise<void> {
     else if(scene==='anomalies')view=vg.plot(vg.denseLine(source,{x:'i',y:'value'}),vg.spike(source,{x:'i',y:'metric',stroke:'#ff6f91'}),vg.panZoomX(),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(70),vg.xLabel('event index'),vg.yLabel('signal / anomaly'));
     else if(scene==='vector-field')view=vg.plot(vg.vector(source,{x:'period',y:'subsystem',rotate:'vx',length:'value',stroke:'cohort'}),vg.colorScheme('turbo'),vg.width(wide.width),vg.height(wide.height),vg.marginLeft(70),vg.xLabel('phase'),vg.yLabel('field band'));
     else if(scene==='small-multiples'){const views=Array.from({length:4},(_,k)=>vg.plot(vg.lineY(vg.from('measures',{filter:`subsystem = ${k}`}),{x:'period',y:vg.avg('value'),stroke:`${['#54d6c6','#7b9cff','#ff6f91','#ffd166'][k]}`}),vg.width(560),vg.height(280),vg.marginLeft(55),vg.yGrid(true),vg.xLabel(`service ${k+1}`)));view=vg.vconcat(vg.hconcat(views[0],views[1]),vg.hconcat(views[2],views[3]));}
-    else {const select=vg.Selection.crossfilter();view=vg.vconcat(vg.plot(vg.hexbin(source,{x:'period',y:'value',fill:vg.count(),binWidth:9}),vg.intervalXY({as:select}),vg.colorScheme('viridis'),vg.width(1120),vg.height(360),vg.marginLeft(68)),vg.plot(vg.barY(vg.from('measures',{filterBy:select}),{x:'cohort',y:vg.count(),fill:'cohort'}),vg.colorScheme('turbo'),vg.width(1120),vg.height(240),vg.marginLeft(68),vg.yGrid(true)));}
+    else {const select=vg.Selection.crossfilter();trackSelection(coordinator,select,'measures');view=vg.vconcat(vg.plot(vg.hexbin(source,{x:'period',y:'value',fill:vg.count(),binWidth:9}),vg.intervalXY({as:select}),vg.colorScheme('viridis'),vg.width(1120),vg.height(360),vg.marginLeft(68)),vg.plot(vg.barY(vg.from('measures',{filterBy:select}),{x:'cohort',y:vg.count(),fill:'cohort'}),vg.colorScheme('turbo'),vg.width(1120),vg.height(240),vg.marginLeft(68),vg.yGrid(true)));}
     chart.replaceChildren(view);
   }
 

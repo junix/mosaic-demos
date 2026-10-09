@@ -125,6 +125,40 @@ try {
       await page.mouse.move(box.x + box.width * 0.63, box.y + box.height * 0.64, {steps: 8});
       await page.mouse.up();
       await page.waitForFunction(() => (window.__mosaicDemo?.interactions ?? 0) > 0);
+      // Generic pointer events alone prove nothing about the crossfilter: the
+      // linked and operations scenes expose window.__mosaicDemo.selection as a
+      // re-queried count of the rows their dependent views currently match.
+      // Require the deterministic brush above to shrink that count below the
+      // full row count, and a tap on the overlay (which clears the d3 brush)
+      // to restore it. Other scenes keep the pointer smoke check only.
+      if (scene === 'linked' || scene === 'operations') {
+        const readProbe = () => page.evaluate(() => ({...window.__mosaicDemo?.selection}));
+        const baseline = state.selection;
+        if (!baseline || baseline.count !== state.rows) {
+          failures.push(`${scene}: selection probe must start at all ${state.rows} rows, got ${baseline ? baseline.count : 'no probe'}`);
+        }
+        await page.waitForFunction(
+          rows => {
+            const {selection} = window.__mosaicDemo ?? {};
+            return Boolean(selection && !selection.error && selection.count > 0 && selection.count < rows);
+          },
+          state.rows,
+          {timeout: 20_000}
+        ).catch(async () => failures.push(`${scene}: deterministic brush did not change the linked query (probe: ${JSON.stringify(await readProbe())})`));
+        const brushed = await page.evaluate(() => window.__mosaicDemo?.selection?.count);
+        await page.mouse.move(box.x + box.width * 0.18, box.y + box.height * 0.28);
+        await page.mouse.down();
+        await page.mouse.up();
+        await page.waitForFunction(
+          rows => {
+            const {selection} = window.__mosaicDemo ?? {};
+            return Boolean(selection && !selection.error && selection.count === rows);
+          },
+          state.rows,
+          {timeout: 20_000}
+        ).catch(async () => failures.push(`${scene}: brush reset did not restore the linked query (probe: ${JSON.stringify(await readProbe())})`));
+        console.log(`linked ${scene}: brush matched ${brushed}/${state.rows} rows, reset restored all`);
+      }
     }
     if (errors.length) failures.push(`${scene}: console errors: ${errors.join(' | ')}`);
     console.log(`rendered ${scene}: ${state.rows} DB rows -> ${stats.width}x${stats.height} transparent PNG`);
