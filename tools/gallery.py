@@ -35,6 +35,22 @@ RENDERABLE = IMAGE_EXT | VIDEO_EXT
 # discovery
 
 
+CATPPUCCIN_SNIPPET = Path(__file__).with_name("catppuccin-theme.html")
+
+
+def with_catppuccin(page: str) -> str:
+    """Add the shared Catppuccin theme: Mocha dark (default), Latte light, auto/light/dark toggle."""
+    snippet = CATPPUCCIN_SNIPPET.read_text(encoding="utf-8")
+    block = re.compile(r"<!-- catppuccin-theme v\d+:.*?</script>\n?", re.S)
+    if block.search(page):
+        return block.sub(lambda _m: snippet, page, count=1)
+    for pattern in (r"</head\s*>", r"<body\b"):
+        found = re.search(pattern, page, re.I)
+        if found:
+            return page[: found.start()] + snippet + page[found.start():]
+    return snippet + page
+
+
 def tracked_files() -> set:
     """Artifacts committed to git.
 
@@ -638,6 +654,7 @@ def build(check_only: bool = False) -> int:
 </body>
 </html>
 """
+    page = with_catppuccin(page)
     if check_only:
         if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != page:
             print("stale gallery: run just gallery", file=sys.stderr)
